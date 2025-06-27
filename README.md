@@ -201,6 +201,15 @@ http:
           databaseAutoUpdateToken: ""                # IP2Location download token (if using premium)
           databaseAutoUpdateCode: "DB1"              # Database product code to download (if using premium)
 
+          #-------------------------------
+          # Response header settings
+          #-------------------------------  
+          countryHeader: "X-IPCountry"  
+          # Optional header to store the country code in
+          # you can use this to add the header to the access logs
+          # and see where all your trafik is coming from
+          # make sure to include the header in the logs: accesslog.fields.headers.names.X-IPCountry=keep
+
 ```
 
 ### 🔄 Processing Order
