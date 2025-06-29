@@ -135,22 +135,42 @@ func (tree *ipRadixTree) contains(ip net.IP) (bool, int) {
 // IpLookupHelper provides fast IP block lookups using radix trees
 // Optimized for O(32) IPv4 and O(128) IPv6 lookups instead of O(n) linear search
 type IpLookupHelper struct {
-	tree *ipRadixTree
+	tree  *ipRadixTree
+	count int // Number of CIDR blocks stored
+}
+
+// NewEmptyIpLookupHelper creates a new empty IP lookup helper
+func NewEmptyIpLookupHelper() *IpLookupHelper {
+	return &IpLookupHelper{
+		tree: newIPRadixTree(),
+	}
+}
+
+// AddCIDR adds a single CIDR block to the helper
+func (helper *IpLookupHelper) AddCIDR(cidr string) error {
+	_, block, err := net.ParseCIDR(cidr)
+	if err != nil {
+		return fmt.Errorf("parse error on CIDR %q: %v", cidr, err)
+	}
+	helper.tree.insert(block)
+	helper.count++
+	return nil
+}
+
+// Count returns the number of CIDR blocks stored in the helper
+func (helper *IpLookupHelper) Count() int {
+	return helper.count
 }
 
 // NewIpLookupHelper creates a new IP lookup helper with the given CIDR block list
 func NewIpLookupHelper(cidrBlocks []string) (*IpLookupHelper, error) {
-	helper := &IpLookupHelper{
-		tree: newIPRadixTree(),
-	}
+	helper := NewEmptyIpLookupHelper()
 
 	// Parse and insert CIDR blocks
 	for _, cidr := range cidrBlocks {
-		_, block, err := net.ParseCIDR(cidr)
-		if err != nil {
-			return nil, fmt.Errorf("parse error on CIDR %q: %v", cidr, err)
+		if err := helper.AddCIDR(cidr); err != nil {
+			return nil, err
 		}
-		helper.tree.insert(block)
 	}
 
 	return helper, nil
@@ -159,6 +179,9 @@ func NewIpLookupHelper(cidrBlocks []string) (*IpLookupHelper, error) {
 // IsContained checks if an IP is contained in any of the CIDR blocks
 // Returns (isContained, prefixLength, error)
 func (helper *IpLookupHelper) IsContained(ipAddr net.IP) (bool, int, error) {
+	if ipAddr == nil {
+		return false, 0, fmt.Errorf("IP address is nil")
+	}
 	found, prefixLen := helper.tree.contains(ipAddr)
 	return found, prefixLen, nil
 }
