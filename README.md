@@ -166,6 +166,8 @@ http:
           # Network Rules
           #-------------------------------
           allowPrivate: true              # Allow requests from private/internal networks (marked as "PRIVATE")
+          # This includes RFC 1918 private networks (10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16)
+          # and loopback addresses (127.0.0.0/8 for IPv4, ::1 for IPv6)
           allowedIPBlocks:                # CIDR ranges to always allow (highest priority)
             - "192.168.0.0/16"
             - "10.0.0.0/8"
@@ -293,10 +295,12 @@ When using JSON logging, the following fields are included in **blocked request*
 - `host`: Request host header
 - `method`: HTTP method used
 - `phase`: Processing phase where the action occurred:
-  - `ip_allow_private`: Private network check
-  - `ip_block`: IP block rules check
-  - `country_block`: Country rules check
-  - `default`: Default allow/deny rule
+  - `allow_private`: Private network check
+  - `blocked_ip_block`: IP block rules check (blocked)
+  - `allowed_ip_block`: IP block rules check (allowed)
+  - `blocked_country`: Country rules check (blocked)
+  - `allowed_country`: Country rules check (allowed)
+  - `default_allow`: Default allow/deny rule
 - `path`: Request path
 
 Example log entry:
@@ -311,7 +315,7 @@ Example log entry:
     "country": "PRIVATE",
     "host": "localhost:8000",
     "method": "GET",
-    "phase": "ip_allow_private",
+    "phase": "allow_private",
     "path": "/bar"
 }
 ```
