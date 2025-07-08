@@ -74,20 +74,26 @@ type DatabaseFactory struct {
 	sourceDbPath       string // Track the original database that was used for the current local copy
 	updateTicker       *time.Ticker
 	stopChan           chan struct{}
+	factoryID          string // Unique identifier for this factory instance
 }
 
 // NewDatabaseFactory creates a new database factory instance
 func NewDatabaseFactory(config *DatabaseConfig, logger *slog.Logger) (*DatabaseFactory, error) {
+	// Generate unique factory ID and create wrapped logger
+	factoryID := generateConfigHash(config)
+	wrappedLogger := logger.With("factory_id", factoryID)
+
 	factory := &DatabaseFactory{
-		config:   config,
-		logger:   logger,
-		wrapper:  &DatabaseWrapper{},
-		stopChan: make(chan struct{}),
+		config:    config,
+		logger:    wrappedLogger,
+		wrapper:   &DatabaseWrapper{},
+		stopChan:  make(chan struct{}),
+		factoryID: factoryID,
 	}
 
 	// Initialize the database
 	if err := factory.initialize(); err != nil {
-		return nil, fmt.Errorf("failed to initialize database factory: %w", err)
+		return nil, fmt.Errorf("NewDatabaseFactory: failed to initialize database factory: %w", err)
 	}
 
 	// Start auto-update ticker if enabled
@@ -106,6 +112,11 @@ func (df *DatabaseFactory) GetWrapper() *DatabaseWrapper {
 // GetSourceDbPath returns the original database path that was used for the current active database
 func (df *DatabaseFactory) GetSourceDbPath() string {
 	return df.sourceDbPath
+}
+
+// GetFactoryID returns the unique identifier for this factory instance
+func (df *DatabaseFactory) GetFactoryID() string {
+	return df.factoryID
 }
 
 // Close shuts down the factory and cleans up resources
@@ -243,7 +254,7 @@ func (df *DatabaseFactory) startAutoUpdate() {
 	df.updateTicker = time.NewTicker(24 * time.Hour)
 
 	go func() {
-		df.logger.Debug("starting auto-update ticker")
+		df.logger.Debug("startAutoUpdate: starting auto-update ticker")
 
 		// Run first check immediately
 		df.checkAndUpdate()
@@ -253,7 +264,7 @@ func (df *DatabaseFactory) startAutoUpdate() {
 			case <-df.updateTicker.C:
 				df.checkAndUpdate()
 			case <-df.stopChan:
-				df.logger.Debug("stopping auto-update ticker")
+				df.logger.Debug("startAutoUpdate: stopping auto-update ticker")
 				return
 			}
 		}
@@ -264,22 +275,22 @@ func (df *DatabaseFactory) startAutoUpdate() {
 func (df *DatabaseFactory) checkAndUpdate() {
 	currentVersion := df.wrapper.GetVersion()
 	if currentVersion == nil {
-		df.logger.Debug("no current version available, skipping update check")
+		df.logger.Debug("checkAndUpdate: no current version available, skipping update check")
 		return
 	}
 
 	// Only update if database is older than 1 month
 	if time.Since(currentVersion.Date()) < 30*24*time.Hour {
-		df.logger.Debug("database is recent, skipping update", "age", time.Since(currentVersion.Date()).Round(24*time.Hour))
+		df.logger.Debug("checkAndUpdate: database is recent, skipping update", "age", time.Since(currentVersion.Date()).Round(24*time.Hour))
 		return
 	}
 
-	df.logger.Info("database is old, attempting download update", "age", time.Since(currentVersion.Date()).Round(24*time.Hour))
+	df.logger.Info("checkAndUpdate: database is old, attempting download update", "age", time.Since(currentVersion.Date()).Round(24*time.Hour))
 
 	// Find current latest database
 	latest, err := findLatestDatabase(df.config.DatabaseAutoUpdateDir, df.config.DatabaseAutoUpdateCode)
 	if err != nil {
-		df.logger.Debug("no existing database found during update check", "error", err)
+		df.logger.Debug("checkAndUpdate: no existing database found during update check", "error", err)
 		latest = ""
 	}
 
@@ -290,21 +301,26 @@ func (df *DatabaseFactory) checkAndUpdate() {
 		DatabaseAutoUpdateCode:  df.config.DatabaseAutoUpdateCode,
 	}
 
-	if err := UpdateIfNeeded(latest, false, df.logger, updateCfg); err != nil {
-		df.logger.Error("background database update failed", "error", err)
+	if err := UpdateIfNeeded(latest, true, df.logger, updateCfg); err != nil {
+		df.logger.Error("checkAndUpdate: background database update failed", "error", err)
 		return
 	}
 
 	// Check if we got a new database
 	newLatest, err := findLatestDatabase(df.config.DatabaseAutoUpdateDir, df.config.DatabaseAutoUpdateCode)
-	if err != nil || newLatest == "" || newLatest == latest {
-		df.logger.Debug("no new database found after update attempt")
+	if err != nil {
+		df.logger.Error("checkAndUpdate: failed to find latest database after update attempt", "error", err)
+		return
+	}
+
+	if newLatest == "" || newLatest == latest {
+		df.logger.Debug("checkAndUpdate: no new database found after update attempt")
 		return
 	}
 
 	// Perform hot swap
 	if err := df.performHotSwap(newLatest); err != nil {
-		df.logger.Error("failed to perform hot swap", "error", err)
+		df.logger.Error("checkAndUpdate: failed to perform hot swap", "error", err)
 	}
 }
 
@@ -320,7 +336,7 @@ func (df *DatabaseFactory) performHotSwap(newDatabasePath string) error {
 	newDB, err := ip2location.OpenDB(newLocalCopy)
 	if err != nil {
 		os.Remove(newLocalCopy)
-		return fmt.Errorf("failed to open new database: %w", err)
+		return fmt.Errorf("performHotSwap: failed to open new database: %w", err)
 	}
 
 	// Get version
@@ -328,7 +344,7 @@ func (df *DatabaseFactory) performHotSwap(newDatabasePath string) error {
 	if err != nil {
 		newDB.Close()
 		os.Remove(newLocalCopy)
-		return fmt.Errorf("failed to read new database version: %w", err)
+		return fmt.Errorf("performHotSwap: failed to read new database version: %w", err)
 	}
 
 	// Perform the swap
@@ -341,12 +357,12 @@ func (df *DatabaseFactory) performHotSwap(newDatabasePath string) error {
 	// Close old database after brief delay for ongoing operations
 	if oldDB != nil {
 		go func() {
-			time.Sleep(1 * time.Second) // Brief delay, not the most elegant approach, but simple.
+			time.Sleep(10 * time.Second) // Brief delay, not the most elegant approach, but simple. And if it panics, not really a big deal.
 			oldDB.Close()
 		}()
 	}
 
-	df.logger.Info("database hot-swapped successfully",
+	df.logger.Info("performHotSwap: database hot-swapped successfully",
 		"new_version", newVersion.String(),
 		"new_path", newLocalCopy)
 
