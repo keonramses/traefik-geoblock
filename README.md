@@ -11,6 +11,17 @@ A Traefik plugin that allows or blocks requests based on IP geolocation using IP
 
 > 🌍 This project includes IP2Location LITE data available from [`lite.ip2location.com`](https://lite.ip2location.com/database/ip-country).
 
+## Performance & Scalability
+
+**Designed for high-performance production environments:**
+
+- **No external API calls** - All geolocation lookups are performed using local IP2Location database files, ensuring zero latency from external services
+- **Minimal memory footprint** - No internal caching mechanisms; leverages the IP2Location library's efficient binary database format for direct lookups
+- **Zero network dependencies** - Once configured, operates entirely offline with no external service dependencies
+- **Hot-swappable database updates** - Database updates occur without middleware restart or service interruption
+
+This architecture ensures consistent response times and eliminates external service bottlenecks, making it ideal for high-traffic environments and air-gapped deployments.
+
 ## ✨ Features
 
 - Block or allow requests based on country of origin (using ISO 3166-1 alpha-2 country codes)
@@ -58,6 +69,15 @@ experimental:
       moduleName: github.com/david-garcia-garcia/traefik-geoblock
       version: v1.0.1
 ```
+
+## Network Requirements
+
+**For automatic database updates to function, ensure your firewall allows outbound HTTPS connections to:**
+
+- `download.ip2location.com`
+- `www.ip2location.com`
+
+> **Note:** If automatic updates are disabled (`databaseAutoUpdate: false`), no external network access is required and the plugin operates entirely offline.
 
 ## 🧪 Testing and development
 
