@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Access Denied</title>
+  <style>
+    :root{
+      --bg:#f6f7f9;
+      --card:#ffffff;
+      --text:#111827;
+      --muted:#6b7280;
+      --accent:#dc3545;
+      --shadow:0 10px 25px rgba(0,0,0,.08);
+      --radius:14px;
+      --btn:#111827;
+      --btn-text:#ffffff;
+      --btn-muted:#6b7280;
+      --ok:#059669;
+      --err:#dc2626;
+    }
+    @media (prefers-color-scheme: dark){
+      :root{
+        --bg:#0b0f14;
+        --card:#0f141b;
+        --text:#e5e7eb;
+        --muted:#9aa4b2;
+        --accent:#ef4444;
+        --shadow:0 10px 25px rgba(0,0,0,.35);
+        --btn:#e5e7eb;
+        --btn-text:#0f141b;
+        --btn-muted:#9aa4b2;
+      }
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      margin:0;
+      font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", "Apple Color Emoji","Segoe UI Emoji","Segoe UI Symbol";
+      background:var(--bg);
+      color:var(--text);
+      min-height:100dvh;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      padding:24px;
+    }
+    .ban{
+      width:min(720px, 100%);
+      background:var(--card);
+      border-radius:var(--radius);
+      box-shadow:var(--shadow);
+      padding:clamp(20px, 4vw, 40px);
+      text-align:center;
+      margin:auto;
+    }
+    .ban h1{
+      margin:0 0 .5rem 0;
+      font-size:clamp(1.4rem, 4.5vw, 2rem);
+      line-height:1.2;
+      color:var(--accent);
+      letter-spacing:.2px;
+    }
+    .ban p{
+      margin:.25rem 0 0 0;
+      font-size:clamp(.95rem, 2.8vw, 1.05rem);
+      line-height:1.6;
+      color:var(--text);
+    }
+    .muted{color:var(--muted)}
+    .row{
+      display:flex; gap:.5rem; flex-wrap:wrap; justify-content:center; align-items:center;
+    }
+    .pill{
+      display:inline-flex; align-items:center; gap:.5rem;
+      padding:.4rem .7rem;
+      border-radius:999px;
+      background:rgba(127,127,127,.08);
+      font-size:.95rem;
+      white-space:nowrap;
+    }
+    .flag{font-size:1.15em; line-height:1;}
+    .hint{margin-top:1rem; font-size:.9rem;}
+
+    .actions{
+      margin-top:clamp(14px, 3.2vw, 22px);
+      display:flex; gap:.6rem; flex-wrap:wrap; justify-content:center;
+    }
+    .btn{
+      appearance:none; -webkit-appearance:none;
+      border:none;
+      border-radius:10px;
+      padding:.7rem 1rem;
+      font-size:1rem;
+      cursor:pointer;
+      box-shadow:0 1px 2px rgba(0,0,0,.06);
+      transition:transform .05s ease, box-shadow .15s ease, opacity .2s ease;
+      display:inline-flex; align-items:center; gap:.5rem;
+      text-decoration:none;
+    }
+    .btn-primary{
+      background:var(--btn);
+      color:var(--btn-text);
+    }
+    .btn-secondary{
+      background:transparent;
+      color:var(--btn);
+      border:1px solid rgba(127,127,127,.35);
+    }
+    .btn:active{ transform:translateY(1px); }
+    .btn[disabled], .btn[aria-disabled="true"]{
+      opacity:.6; cursor:not-allowed;
+    }
+    .sr-only{
+      position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0;
+    }
+    .status{margin-top:.6rem; font-size:.9rem;}
+    .ok{color:var(--ok)} .err{color:var(--err)}
+  </style>
+</head>
+<body>
+  <!-- Configure support link. Keep {{.Country}} as two-letter code.
+       You can change data-retry-url to your real endpoint. -->
+  <div id="data"
+       data-country="{{.Country}}"
+       data-ip="{{.IP}}"
+       data-support-url="https://support.example.com/ticket"
+       data-retry-url="https://example.com/healthz"
+       data-retry-method="HEAD"
+       data-retry-timeout-ms="3000"
+       hidden></div>
+
+  <main class="ban" role="main" aria-labelledby="title" aria-describedby="message">
+    <h1 id="title">Access Denied</h1>
+
+    <p id="message">
+      Access to this website is not available in
+      <span id="countryFull" class="pill">
+        <span class="flag" id="flag" aria-hidden="true">🏳️</span>
+        <span id="countryName">—</span>
+      </span>
+    </p>
+
+    <p class="hint muted" aria-live="polite">
+      <span class="row">
+        <span id="code" class="pill" title="Country code">CC</span>
+        <span id="ip" class="pill" title="Your IP">0.0.0.0</span>
+      </span>
+    </p>
+
+    <div class="actions">
+      <a id="supportBtn" class="btn btn-secondary" href="#" target="_blank" rel="noopener noreferrer">
+        Contact Support
+        <span class="sr-only">(opens in a new tab)</span>
+      </a>
+      <button id="retryBtn" class="btn btn-primary" type="button">Retry</button>
+    </div>
+    <div id="status" class="status muted" aria-live="polite"></div>
+  </main>
+
+  <script>
+    (function () {
+      const el = document.getElementById('data');
+      const rawCode = (el.getAttribute('data-country') || '').trim().toUpperCase();
+      const ip = (el.getAttribute('data-ip') || '').trim();
+      const supportURL = (el.getAttribute('data-support-url') || '').trim();
+
+      // Retry configuration
+      const retryURL = (el.getAttribute('data-retry-url') || '').trim();                // e.g., https://example.com/healthz
+      const retryMethod = (el.getAttribute('data-retry-method') || 'HEAD').toUpperCase(); // HEAD or GET
+      const retryTimeoutMs = parseInt(el.getAttribute('data-retry-timeout-ms') || '3000', 10);
+
+      const codeEl = document.getElementById('code');
+      const ipEl = document.getElementById('ip');
+      const nameEl = document.getElementById('countryName');
+      const flagEl = document.getElementById('flag');
+      const supportBtn = document.getElementById('supportBtn');
+      const retryBtn = document.getElementById('retryBtn');
+      const statusEl = document.getElementById('status');
+
+      codeEl.textContent = rawCode || 'Unknown';
+      ipEl.textContent = ip || 'Unknown';
+
+      // Full ISO 3166-1 alpha-2 fallback (includes XK for Kosovo)
+      const ISO_MAP = {
+        AD:"Andorra", AE:"United Arab Emirates", AF:"Afghanistan", AG:"Antigua and Barbuda", AI:"Anguilla",
+        AL:"Albania", AM:"Armenia", AO:"Angola", AQ:"Antarctica", AR:"Argentina", AS:"American Samoa",
+        AT:"Austria", AU:"Australia", AW:"Aruba", AX:"Åland Islands", AZ:"Azerbaijan",
+        BA:"Bosnia and Herzegovina", BB:"Barbados", BD:"Bangladesh", BE:"Belgium", BF:"Burkina Faso",
+        BG:"Bulgaria", BH:"Bahrain", BI:"Burundi", BJ:"Benin", BL:"Saint Barthélemy", BM:"Bermuda",
+        BN:"Brunei Darussalam", BO:"Bolivia", BQ:"Bonaire, Sint Eustatius and Saba", BR:"Brazil",
+        BS:"Bahamas", BT:"Bhutan", BV:"Bouvet Island", BW:"Botswana", BY:"Belarus", BZ:"Belize",
+        CA:"Canada", CC:"Cocos (Keeling) Islands", CD:"Congo, Democratic Republic of the", CF:"Central African Republic",
+        CG:"Congo", CH:"Switzerland", CI:"Côte d’Ivoire", CK:"Cook Islands", CL:"Chile", CM:"Cameroon",
+        CN:"China", CO:"Colombia", CR:"Costa Rica", CU:"Cuba", CV:"Cabo Verde", CW:"Curaçao", CX:"Christmas Island",
+        CY:"Cyprus", CZ:"Czechia",
+        DE:"Germany", DJ:"Djibouti", DK:"Denmark", DM:"Dominica", DO:"Dominican Republic", DZ:"Algeria",
+        EC:"Ecuador", EE:"Estonia", EG:"Egypt", EH:"Western Sahara", ER:"Eritrea", ES:"Spain", ET:"Ethiopia",
+        FI:"Finland", FJ:"Fiji", FK:"Falkland Islands (Malvinas)", FM:"Micronesia, Federated States of",
+        FO:"Faroe Islands", FR:"France",
+        GA:"Gabon", GB:"United Kingdom", GD:"Grenada", GE:"Georgia", GF:"French Guiana", GG:"Guernsey",
+        GH:"Ghana", GI:"Gibraltar", GL:"Greenland", GM:"Gambia", GN:"Guinea", GP:"Guadeloupe", GQ:"Equatorial Guinea",
+        GR:"Greece", GS:"South Georgia and the South Sandwich Islands", GT:"Guatemala", GU:"Guam",
+        GW:"Guinea-Bissau", GY:"Guyana",
+        HK:"Hong Kong", HM:"Heard Island and McDonald Islands", HN:"Honduras", HR:"Croatia", HT:"Haiti",
+        HU:"Hungary",
+        ID:"Indonesia", IE:"Ireland", IL:"Israel", IM:"Isle of Man", IN:"India", IO:"British Indian Ocean Territory",
+        IQ:"Iraq", IR:"Iran, Islamic Republic of", IS:"Iceland", IT:"Italy",
+        JE:"Jersey", JM:"Jamaica", JO:"Jordan", JP:"Japan",
+        KE:"Kenya", KG:"Kyrgyzstan", KH:"Cambodia", KI:"Kiribati", KM:"Comoros", KN:"Saint Kitts and Nevis",
+        KP:"Korea, Democratic People’s Republic of", KR:"Korea, Republic of", KW:"Kuwait", KY:"Cayman Islands",
+        KZ:"Kazakhstan", LA:"Lao People’s Democratic Republic", LB:"Lebanon", LC:"Saint Lucia", LI:"Liechtenstein",
+        LK:"Sri Lanka", LR:"Liberia", LS:"Lesotho", LT:"Lithuania", LU:"Luxembourg", LV:"Latvia", LY:"Libya",
+        MA:"Morocco", MC:"Monaco", MD:"Moldova, Republic of", ME:"Montenegro", MF:"Saint Martin (French part)",
+        MG:"Madagascar", MH:"Marshall Islands", MK:"North Macedonia", ML:"Mali", MM:"Myanmar", MN:"Mongolia",
+        MO:"Macao", MP:"Northern Mariana Islands", MQ:"Martinique", MR:"Mauritania", MS:"Montserrat",
+        MT:"Malta", MU:"Mauritius", MV:"Maldives", MW:"Malawi", MX:"Mexico", MY:"Malaysia", MZ:"Mozambique",
+        NA:"Namibia", NC:"New Caledonia", NE:"Niger", NF:"Norfolk Island", NG:"Nigeria", NI:"Nicaragua",
+        NL:"Netherlands", NO:"Norway", NP:"Nepal", NR:"Nauru", NU:"Niue", NZ:"New Zealand",
+        OM:"Oman",
+        PA:"Panama", PE:"Peru", PF:"French Polynesia", PG:"Papua New Guinea", PH:"Philippines", PK:"Pakistan",
+        PL:"Poland", PM:"Saint Pierre and Miquelon", PN:"Pitcairn", PR:"Puerto Rico", PS:"Palestine, State of",
+        PT:"Portugal", PW:"Palau", PY:"Paraguay",
+        QA:"Qatar",
+        RE:"Réunion", RO:"Romania", RS:"Serbia", RU:"Russian Federation", RW:"Rwanda",
+        SA:"Saudi Arabia", SB:"Solomon Islands", SC:"Seychelles", SD:"Sudan", SE:"Sweden", SG:"Singapore",
+        SH:"Saint Helena, Ascension and Tristan da Cunha", SI:"Slovenia", SJ:"Svalbard and Jan Mayen", SK:"Slovakia",
+        SL:"Sierra Leone", SM:"San Marino", SN:"Senegal", SO:"Somalia", SR:"Suriname", SS:"South Sudan",
+        ST:"Sao Tome and Principe", SV:"El Salvador", SX:"Sint Maarten (Dutch part)", SY:"Syrian Arab Republic",
+        SZ:"Eswatini",
+        TC:"Turks and Caicos Islands", TD:"Chad", TF:"French Southern Territories", TG:"Togo", TH:"Thailand",
+        TJ:"Tajikistan", TK:"Tokelau", TL:"Timor-Leste", TM:"Turkmenistan", TN:"Tunisia", TO:"Tonga",
+        TR:"Türkiye", TT:"Trinidad and Tobago", TV:"Tuvalu", TW:"Taiwan, Province of China",
+        TZ:"Tanzania, United Republic of",
+        UA:"Ukraine", UG:"Uganda", UM:"United States Minor Outlying Islands", US:"United States of America",
+        UY:"Uruguay", UZ:"Uzbekistan",
+        VA:"Holy See", VC:"Saint Vincent and the Grenadines", VE:"Venezuela", VG:"Virgin Islands (British)",
+        VI:"Virgin Islands (U.S.)", VN:"Viet Nam", VU:"Vanuatu",
+        WF:"Wallis and Futuna", WS:"Samoa",
+        XK:"Kosovo",
+        YE:"Yemen", YT:"Mayotte",
+        ZA:"South Africa", ZM:"Zambia", ZW:"Zimbabwe"
+      };
+
+      function countryNameFromCode(code){
+        if(!code) return 'your country';
+        if (typeof Intl !== 'undefined' && Intl.DisplayNames) {
+          try {
+            const dn = new Intl.DisplayNames([navigator.language || 'en'], { type: 'region' });
+            const name = dn.of(code);
+            if (name && name !== code) return name;
+          } catch(e){/* fallback below */}
+        }
+        return ISO_MAP[code] || 'your country';
+      }
+
+      function flagEmoji(code){
+        if(!code || code.length !== 2) return '🏳️';
+        const A = 0x1F1E6;
+        const up = code.toUpperCase();
+        return String.fromCodePoint(A + (up.codePointAt(0) - 65), A + (up.codePointAt(1) - 65));
+      }
+
+      const fullName = countryNameFromCode(rawCode);
+      nameEl.textContent = fullName;
+      flagEl.textContent = flagEmoji(rawCode);
+
+      // Support button handling
+      if (supportURL) {
+        supportBtn.href = supportURL;
+        supportBtn.style.display = 'inline-flex';
+      } else {
+        supportBtn.style.display = 'none';
+      }
+
+      // --- Retry: ping endpoint first, then reload if 2xx ---
+      function setStatus(msg, ok) {
+        statusEl.textContent = msg;
+        statusEl.className = 'status ' + (ok ? 'ok' : 'err');
+      }
+      function withTimeout(promise, ms){
+        return new Promise((resolve, reject) => {
+          const t = setTimeout(() => reject(new Error('timeout')), ms);
+          promise.then(v => { clearTimeout(t); resolve(v); }, e => { clearTimeout(t); reject(e); });
+        });
+      }
+
+      retryBtn.addEventListener('click', async function(){
+        retryBtn.setAttribute('disabled','true');
+        setStatus('Checking availability…', false);
+
+        try {
+          const url = new URL(retryURL || 'https://example.com/healthz', location.href);
+          url.searchParams.set('_t', String(Date.now()));
+
+          const res = await withTimeout(fetch(url.toString(), {
+            method: retryMethod,   // HEAD (default) or GET
+            cache: 'no-store',
+            mode: 'cors'           // ensure your health endpoint allows CORS if on a different origin
+          }), retryTimeoutMs);
+
+          if (res.ok) {
+            setStatus('Service reachable. Reloading…', true);
+            setTimeout(() => location.reload(), 250);
+          } else {
+            setStatus(`Still blocked (HTTP ${res.status}). Try again later.`, false);
+            retryBtn.removeAttribute('disabled');
+          }
+        } catch (e) {
+          setStatus(`Check failed: ${e.message || e}.`, false);
+          retryBtn.removeAttribute('disabled');
+        }
+      });
+    })();
+  </script>
+</body>
+</html>
