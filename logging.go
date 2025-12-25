@@ -1,6 +1,7 @@
 package traefik_geoblock
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"log/slog"
@@ -18,21 +19,33 @@ func (w *traefikLogWriter) Write(p []byte) (n int, err error) {
 }
 
 // createBootstrapLogger creates a logger for initial plugin setup and configuration
-func createBootstrapLogger(name string) *slog.Logger {
-	var logLevel slog.Level = slog.LevelDebug
+func createBootstrapLogger(name string, level string) *slog.Logger {
+	var logLevel slog.Level
+	level = strings.ToLower(level)
+	switch level {
+	case "debug":
+		logLevel = slog.LevelDebug
+	case "info":
+		logLevel = slog.LevelInfo
+	case "warn":
+		logLevel = slog.LevelWarn
+	case "error":
+		logLevel = slog.LevelError
+	default:
+		logLevel = slog.LevelInfo
+	}
 
 	opts := &slog.HandlerOptions{
 		Level: logLevel,
 	}
 
-	// Create a writer that writes directly to stdout
 	writer := &traefikLogWriter{}
 	handler := slog.NewTextHandler(writer, opts)
 	return slog.New(handler).With("plugin", name)
 }
 
 // createLogger creates a configured logger based on the provided settings
-func createLogger(name, level, format, path string, bufferSizeBytes, timeoutSeconds int, bootstrapLogger *slog.Logger) *slog.Logger {
+func createLogger(ctx context.Context, name, level, format, path string, bufferSizeBytes, timeoutSeconds int, bootstrapLogger *slog.Logger) *slog.Logger {
 	var logLevel slog.Level
 	level = strings.ToLower(level) // Convert level to lowercase
 	switch level {
@@ -62,7 +75,7 @@ func createLogger(name, level, format, path string, bufferSizeBytes, timeoutSeco
 	// Only attempt file writing if explicitly specified
 	if path != "" {
 		timeout := time.Duration(timeoutSeconds) * time.Second // Convert seconds to duration
-		bw, err := newBufferedFileWriter(path, bufferSizeBytes, timeout)
+		bw, err := newBufferedFileWriter(ctx, path, bufferSizeBytes, timeout, bootstrapLogger)
 		if err != nil {
 			bootstrapLogger.Error("Failed to create buffered file writer for path '%s': %v\n", path, err)
 		} else {

@@ -135,8 +135,6 @@ type Plugin struct {
 
 // New creates a new plugin instance.
 func New(ctx context.Context, next http.Handler, cfg *Config, name string) (http.Handler, error) {
-	bootstrapLogger := createBootstrapLogger(name)
-
 	if next == nil {
 		return nil, fmt.Errorf("%s: no next handler provided", name)
 	}
@@ -145,8 +143,10 @@ func New(ctx context.Context, next http.Handler, cfg *Config, name string) (http
 		return nil, fmt.Errorf("%s: no config provided", name)
 	}
 
+	bootstrapLogger := createBootstrapLogger(name, cfg.LogLevel)
+
 	// Create logger first so we can use it for debugging
-	logger := createLogger(name, cfg.LogLevel, cfg.LogFormat, cfg.LogPath, cfg.FileLogBufferSizeBytes, cfg.FileLogBufferTimeoutSeconds, bootstrapLogger)
+	logger := createLogger(ctx, name, cfg.LogLevel, cfg.LogFormat, cfg.LogPath, cfg.FileLogBufferSizeBytes, cfg.FileLogBufferTimeoutSeconds, bootstrapLogger)
 	logger.Debug("initializing plugin",
 		"logLevel", cfg.LogLevel,
 		"logFormat", cfg.LogFormat,
